@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tunnelagent — bring your agents anywhere SSH can go</title>
+<meta name="description" content="Run AI coding agents on any remote machine over SSH. No installation, no permissions, no relay server.">
+<meta property="og:title" content="tunnelagent">
+<meta property="og:description" content="Bring your AI agents anywhere SSH can go. No remote installation, no permissions — just sshfs + ssh.">
+<meta property="og:image" content="https://tunnelagent.dev/banner.png">
+<meta property="og:url" content="https://tunnelagent.dev">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e17;
+    --bg-raised: #111827;
+    --bg-card: #151d2e;
+    --border: #1e2a3a;
+    --border-glow: #1a3a4a;
+    --text: #c8d6e5;
+    --text-dim: #5a6a7a;
+    --text-bright: #e8f0f8;
+    --accent: #38bdf8;
+    --accent-dim: #1a6e9a;
+    --accent-glow: rgba(56, 189, 248, 0.15);
+    --teal: #2dd4bf;
+    --teal-dim: rgba(45, 212, 191, 0.1);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', system-ui, sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle dot grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(200, 214, 229, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient gradient blobs */
+  .ambient {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .ambient-1 {
+    width: 600px; height: 600px;
+    top: -200px; right: -100px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.06), transparent 70%);
+  }
+  .ambient-2 {
+    width: 500px; height: 500px;
+    bottom: 20%; left: -150px;
+    background: radial-gradient(circle, rgba(45, 212, 191, 0.04), transparent 70%);
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---- NAV ---- */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(10, 14, 23, 0.8);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .logo {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--text-bright);
+    text-decoration: none;
+    letter-spacing: -0.5px;
+  }
+  nav .logo span { color: var(--accent); }
+  nav .gh-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: none;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  nav .gh-link:hover {
+    border-color: var(--accent-dim);
+    color: var(--text-bright);
+    background: var(--accent-glow);
+  }
+  nav .gh-link svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* ---- HERO ---- */
+  .hero {
+    padding: 140px 0 60px;
+    text-align: center;
+  }
+  .hero-banner {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto 48px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 80px rgba(56, 189, 248, 0.06), 0 24px 48px rgba(0,0,0,0.4);
+  }
+  .hero h1 {
+    font-family: var(--mono);
+    font-size: clamp(36px, 6vw, 56px);
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -1.5px;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero .tagline {
+    font-size: clamp(17px, 2.5vw, 21px);
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-bottom: 40px;
+    letter-spacing: -0.2px;
+  }
+  .hero .tagline em {
+    color: var(--teal);
+    font-style: normal;
+  }
+
+  /* CTA buttons */
+  .cta-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 48px;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 14px 28px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);
+  }
+  .btn-primary:hover {
+    background: #5bcefa;
+    box-shadow: 0 0 40px rgba(56, 189, 248, 0.35);
+    transform: translateY(-1px);
+  }
+  .btn-primary svg { width: 20px; height: 20px; fill: currentColor; }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    padding: 14px 24px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: none;
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-dim);
+    color: var(--text-bright);
+    background: var(--accent-glow);
+  }
+
+  /* Install snippet */
+  .install-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .install-bar .prompt { color: var(--accent); user-select: none; }
+  .install-bar code { color: var(--text-bright); }
+  .copy-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+  }
+  .copy-btn:hover { color: var(--accent); }
+  .copy-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+  /* ---- FEATURES ---- */
+  .features {
+    padding: 40px 0 80px;
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .feature {
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-card);
+    transition: border-color 0.3s;
+  }
+  .feature:hover {
+    border-color: var(--border-glow);
+  }
+  .feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 18px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(56, 189, 248, 0.1);
+  }
+  .feature h3 {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+  }
+  .feature p {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+
+  /* ---- CODE EXAMPLE ---- */
+  .example {
+    padding: 0 0 80px;
+  }
+  .example-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .terminal {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 700px;
+    margin: 0 auto;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--border);
+  }
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+  .terminal-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 8px;
+  }
+  .terminal-body {
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .terminal-body .comment { color: var(--text-dim); }
+  .terminal-body .cmd-prompt { color: var(--teal); user-select: none; }
+  .terminal-body .cmd { color: var(--text-bright); }
+  .terminal-body .flag { color: var(--accent); }
+  .terminal-body .arg { color: var(--text); }
+  .terminal-body .output { color: var(--text-dim); font-style: italic; }
+
+  /* ---- BOTTOM CTA ---- */
+  .bottom-cta {
+    padding: 60px 0 80px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  .bottom-cta p {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    font-family: var(--mono);
+  }
+
+  /* ---- FOOTER ---- */
+  footer {
+    padding: 24px 0;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  footer p {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  footer a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  footer a:hover { color: var(--accent); }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 640px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .hero { padding: 120px 0 40px; }
+    .install-bar { font-size: 12px; padding: 10px 14px; }
+    .terminal-body { font-size: 12px; padding: 16px; }
+    nav .gh-link span { display: none; }
+  }
+
+  /* ---- ANIMATIONS ---- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero-banner { animation: fadeUp 0.6s ease-out both; }
+  .hero h1 { animation: fadeUp 0.6s ease-out 0.1s both; }
+  .hero .tagline { animation: fadeUp 0.6s ease-out 0.2s both; }
+  .cta-row { animation: fadeUp 0.6s ease-out 0.3s both; }
+  .install-bar { animation: fadeUp 0.6s ease-out 0.4s both; }
+  .feature { animation: fadeUp 0.5s ease-out both; }
+  .feature:nth-child(1) { animation-delay: 0.15s; }
+  .feature:nth-child(2) { animation-delay: 0.25s; }
+  .feature:nth-child(3) { animation-delay: 0.35s; }
+  .feature:nth-child(4) { animation-delay: 0.45s; }
+</style>
+</head>
+<body>
+
+<div class="ambient ambient-1"></div>
+<div class="ambient ambient-2"></div>
+
+<nav>
+  <a href="/" class="logo">tunnel<span>agent</span></a>
+  <a href="https://github.com/SmartAppsCo/tunnelagent" class="gh-link">
+    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span>GitHub</span>
+  </a>
+</nav>
+
+<main>
+  <section class="hero">
+    <div class="container">
+      <img src="banner.png" alt="tunnelagent" class="hero-banner">
+      <h1>tunnel<span>agent</span></h1>
+      <p class="tagline">bring your agents <em>anywhere SSH can go</em></p>
+      <div class="cta-row">
+        <a href="https://github.com/SmartAppsCo/tunnelagent" class="btn-primary">
+          <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+        <button class="btn-secondary" onclick="copyInstall()">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+          Copy install command
+        </button>
+      </div>
+      <div class="install-bar">
+        <span class="prompt">$</span>
+        <code>cargo install --git https://github.com/SmartAppsCo/tunnelagent</code>
+        <button class="copy-btn" onclick="copyInstall()" title="Copy">
+          <svg viewBox="0 0 16 16"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z" fill="currentColor"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="features-grid">
+        <div class="feature">
+          <div class="feature-icon">&#x1f50c;</div>
+          <h3>Zero remote installation</h3>
+          <p>Nothing is installed on the remote machine. tunnelagent runs locally and talks to the remote over a standard SSH connection. If you can ssh into it, it works.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#x1f513;</div>
+          <h3>No permissions needed</h3>
+          <p>No root access, no package manager, no runtime dependencies on the remote. Just an SSH key that already works.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#x1f30d;</div>
+          <h3>Works anywhere SSH goes</h3>
+          <p>Dev servers, production boxes, cloud instances, VMs, jump hosts, bastion servers. Any SSH configuration including ProxyJump chains.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#x1f6e1;</div>
+          <h3>Guardrails for sensitive files</h3>
+          <p>Defense in depth: the FUSE filesystem denies access, the shell shim blocks commands, and the system prompt instructs the agent not to touch private files.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="example">
+    <div class="container">
+      <p class="example-label">Get started in one command</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="comment"># Launch Claude Code on a remote machine</span></div>
+          <div><span class="cmd-prompt">$ </span><span class="cmd">tunnelagent</span> <span class="flag">--host</span> <span class="arg">user@remote</span> <span class="flag">--exec</span> <span class="arg">claude</span></div>
+          <br>
+          <div><span class="comment"># Or use Codex</span></div>
+          <div><span class="cmd-prompt">$ </span><span class="cmd">tunnelagent</span> <span class="flag">--host</span> <span class="arg">user@remote</span> <span class="flag">--exec</span> <span class="arg">codex</span></div>
+          <br>
+          <div><span class="comment"># Protect sensitive files</span></div>
+          <div><span class="cmd-prompt">$ </span><span class="cmd">tunnelagent</span> <span class="flag">--host</span> <span class="arg">user@remote</span> <span class="flag">--private</span> <span class="arg">.env "*.key" secrets/</span> <span class="flag">--exec</span> <span class="arg">claude</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bottom-cta">
+    <div class="container">
+      <p>MIT licensed. Written in Rust. One binary. Linux only (for now).</p>
+      <a href="https://github.com/SmartAppsCo/tunnelagent" class="btn-primary">
+        <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <p><a href="https://smartapps.co">SmartAppsCo</a></p>
+  </div>
+</footer>
+
+<script>
+function copyInstall() {
+  navigator.clipboard.writeText('cargo install --git https://github.com/SmartAppsCo/tunnelagent').then(() => {
+    const btns = document.querySelectorAll('.btn-secondary');
+    btns.forEach(b => { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy install command'; }, 2000); });
+  });
+}
+</script>
+</body>
+</html>
